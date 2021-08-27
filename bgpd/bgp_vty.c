@@ -6403,9 +6403,9 @@ static int peer_port_vty(struct vty *vty, const char *ip_str, int afi,
 /* Set specified peer's BGP port.  */
 DEFUN (neighbor_port,
        neighbor_port_cmd,
-       "neighbor <A.B.C.D|X:X::X:X> port (0-65535)",
+       "neighbor <A.B.C.D|X:X::X:X|WORD> port (0-65535)",
        NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR
+       NEIGHBOR_ADDR_STR2 // JvB also allow interface name
        "Neighbor's BGP port\n"
        "TCP port number\n")
 {
@@ -6417,10 +6417,10 @@ DEFUN (neighbor_port,
 
 DEFUN (no_neighbor_port,
        no_neighbor_port_cmd,
-       "no neighbor <A.B.C.D|X:X::X:X> port [(0-65535)]",
+       "no neighbor <A.B.C.D|X:X::X:X|WORD> port [(0-65535)]",
        NO_STR
        NEIGHBOR_STR
-       NEIGHBOR_ADDR_STR
+       NEIGHBOR_ADDR_STR2 // JvB also allow interface name
        "Neighbor's BGP port\n"
        "TCP port number\n")
 {
