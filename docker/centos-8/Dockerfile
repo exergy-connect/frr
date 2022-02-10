@@ -32,7 +32,8 @@ RUN echo '%_smp_mflags %( echo "-j$(/usr/bin/getconf _NPROCESSORS_ONLN)"; )' >> 
         -ba /rpmbuild/SPECS/frr.spec
 
 # This stage installs frr from the rpm
-FROM centos:centos8
+# FROM centos:centos8
+FROM quay.io/centos/centos:stream8
 RUN mkdir -p /pkgs/rpm \
     && yum install -y https://ci1.netdef.org/artifact/LIBYANG-LIBYANGV2/shared/build-2/CentOS-8-x86_64-Packages/libyang2-2.0.0.10.g2eb910e4-1.el8.x86_64.rpm \
         https://ci1.netdef.org/artifact/RPKI-RTRLIB/shared/build-110/CentOS-7-x86_64-Packages/librtr-0.7.0-1.el7.centos.x86_64.rpm
