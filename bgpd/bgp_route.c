@@ -2052,7 +2052,7 @@ bool subgroup_announce_check(struct bgp_dest *dest, struct bgp_path_info *pi,
 		if ((CHECK_FLAG(peer->af_flags[afi][safi],
 				PEER_FLAG_NEXTHOP_LOCAL_UNCHANGED)
 		     && IN6_IS_ADDR_LINKLOCAL(&attr->mp_nexthop_local))
-		    || (!reflect
+		    || (!reflect && !transparent
 			&& IN6_IS_ADDR_LINKLOCAL(&peer->nexthop.v6_local)
 			&& peer->shared_network
 			&& (from == bgp->peer_self
@@ -2113,10 +2113,11 @@ bool subgroup_announce_check(struct bgp_dest *dest, struct bgp_path_info *pi,
 		if (ret == RMAP_DENYMATCH) {
 			if (bgp_debug_update(NULL, p, subgrp->update_group, 0))
 				zlog_debug(
-					"%s [Update:SEND] %pFX is filtered by route-map",
-					peer->host, p);
+					"%s [Update:SEND] %pFX is filtered by route-map '%s'",
+					peer->host, p,
+					ROUTE_MAP_OUT_NAME(filter));
 
-			bgp_attr_flush(attr);
+			bgp_attr_flush(&dummy_attr);
 			return false;
 		}
 	}
@@ -10537,6 +10538,7 @@ static int bgp_show_table(struct vty *vty, struct bgp *bgp, safi_t safi,
 				path.attr = &dummy_attr;
 
 				ret = route_map_apply(rmap, dest_p, &path);
+				bgp_attr_flush(&dummy_attr);
 				if (ret == RMAP_DENYMATCH)
 					continue;
 			}
@@ -10851,6 +10853,10 @@ static int bgp_show(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi,
 		return CMD_WARNING;
 	}
 
+	/* Labeled-unicast routes live in the unicast table. */
+	if (safi == SAFI_LABELED_UNICAST)
+		safi = SAFI_UNICAST;
+
 	table = bgp->rib[afi][safi];
 	/* use MPLS and ENCAP specific shows until they are merged */
 	if (safi == SAFI_MPLS_VPN) {
@@ -10863,9 +10869,6 @@ static int bgp_show(struct vty *vty, struct bgp *bgp, afi_t afi, safi_t safi,
 					       output_arg, use_json,
 					       1, NULL, NULL);
 	}
-	/* labeled-unicast routes live in the unicast table */
-	else if (safi == SAFI_LABELED_UNICAST)
-		safi = SAFI_UNICAST;
 
 	return bgp_show_table(vty, bgp, safi, table, type, output_arg, NULL, 1,
 			      NULL, NULL, &json_header_depth, show_flags,
@@ -12122,7 +12125,7 @@ DEFPY (show_ip_bgp_instance_all,
        JSON_STR
       "Increase table width for longer prefixes\n")
 {
-	afi_t afi = AFI_IP;
+	afi_t afi = AFI_IP6;
 	safi_t safi = SAFI_UNICAST;
 	struct bgp *bgp = NULL;
 	int idx = 0;
@@ -13088,16 +13091,6 @@ show_adj_route(struct vty *vty, struct peer *peer, struct bgp_table *table,
 
 	bgp = peer->bgp;
 
-	if (!bgp) {
-		if (use_json) {
-			json_object_string_add(json, "alert", "no BGP");
-			vty_out(vty, "%s\n", json_object_to_json_string(json));
-			json_object_free(json);
-		} else
-			vty_out(vty, "%% No bgp\n");
-		return;
-	}
-
 	subgrp = peer_subgroup(peer, afi, safi);
 
 	if (type == bgp_show_adj_route_advertised && subgrp
@@ -13338,6 +13331,9 @@ static int peer_adj_routes(struct vty *vty, struct peer *peer, afi_t afi,
 				"No such neighbor or address family");
 			vty_out(vty, "%s\n", json_object_to_json_string(json));
 			json_object_free(json);
+			json_object_free(json_ar);
+			json_object_free(json_scode);
+			json_object_free(json_ocode);
 		} else
 			vty_out(vty, "%% No such neighbor or address family\n");
 
@@ -13354,6 +13350,9 @@ static int peer_adj_routes(struct vty *vty, struct peer *peer, afi_t afi,
 				"Inbound soft reconfiguration not enabled");
 			vty_out(vty, "%s\n", json_object_to_json_string(json));
 			json_object_free(json);
+			json_object_free(json_ar);
+			json_object_free(json_scode);
+			json_object_free(json_ocode);
 		} else
 			vty_out(vty,
 				"%% Inbound soft reconfiguration not enabled\n");
@@ -13422,14 +13421,17 @@ static int peer_adj_routes(struct vty *vty, struct peer *peer, afi_t afi,
 			json_object_to_json_string_ext(
 				json, JSON_C_TO_STRING_PRETTY));
 
-		if (!output_count && !filtered_count) {
+		/*
+		 * These fields only give up ownership to `json` when `header1`
+		 * is used (set to zero). See code in `show_adj_route` and
+		 * `show_adj_route_header`.
+		 */
+		if (header1 == 1) {
 			json_object_free(json_scode);
 			json_object_free(json_ocode);
 		}
 
-		if (json)
-			json_object_free(json);
-
+		json_object_free(json);
 	} else if (output_count > 0) {
 		if (filtered_count > 0)
 			vty_out(vty,
@@ -13746,7 +13748,7 @@ DEFUN (show_ip_bgp_flowspec_routes_detailed,
        "Detailed information on flowspec entries\n"
        JSON_STR)
 {
-	afi_t afi = AFI_IP;
+	afi_t afi = AFI_IP6;
 	safi_t safi = SAFI_UNICAST;
 	struct bgp *bgp = NULL;
 	int idx = 0;

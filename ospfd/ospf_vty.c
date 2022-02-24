@@ -892,6 +892,12 @@ ospf_find_vl_data(struct ospf *ospf, struct ospf_vl_config_data *vl_config)
 		vl_data = ospf_vl_data_new(area, vl_config->vl_peer);
 		if (vl_data->vl_oi == NULL) {
 			vl_data->vl_oi = ospf_vl_new(ospf, vl_data);
+			if (!vl_data->vl_oi) {
+				ospf_vl_data_free(vl_data);
+				vty_out(vty,
+					"Can't create VL, check logs for more information\n");
+				return NULL;
+			}
 			ospf_vl_add(ospf, vl_data);
 			ospf_spf_calculate_schedule(ospf,
 						    SPF_FLAG_CONFIG_CHANGE);
@@ -4682,7 +4688,6 @@ static int show_ip_ospf_neighbor_all_common(struct vty *vty, struct ospf *ospf,
 			json_vrf = json_object_new_object();
 		else
 			json_vrf = json;
-		json_neighbor_sub = json_object_new_object();
 	}
 
 	ospf_show_vrf_name(ospf, vty, json_vrf, use_vrf);
@@ -4708,6 +4713,8 @@ static int show_ip_ospf_neighbor_all_common(struct vty *vty, struct ospf *ospf,
 			if (nbr_nbma->nbr == NULL
 			    || nbr_nbma->nbr->state == NSM_Down) {
 				if (use_json) {
+					json_neighbor_sub =
+						json_object_new_object();
 					json_object_int_add(json_neighbor_sub,
 							    "nbrNbmaPriority",
 							    nbr_nbma->priority);
@@ -11834,9 +11841,7 @@ static int config_write_interface_one(struct vty *vty, struct vrf *vrf)
 
 			/* Router Dead Interval print. */
 			if (OSPF_IF_PARAM_CONFIGURED(params, v_wait)
-			    && params->is_v_wait_set
-			    && params->v_wait
-				       != OSPF_ROUTER_DEAD_INTERVAL_DEFAULT) {
+			    && params->is_v_wait_set) {
 				vty_out(vty, " ip ospf dead-interval ");
 
 				/* fast hello ? */
@@ -12521,6 +12526,8 @@ static int ospf_config_write_one(struct vty *vty, struct ospf *ospf)
 
 	/* LDP-Sync print */
 	ospf_ldp_sync_write_config(vty, ospf);
+
+	vty_out(vty, " exit\n");
 
 	write++;
 	return write;

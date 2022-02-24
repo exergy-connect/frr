@@ -46,6 +46,7 @@
 #include "bgpd/bgp_errors.h"
 #include "bgpd/bgp_network.h"
 #include "bgpd/bgp_zebra.h"
+#include "bgpd/bgp_nht.h"
 
 extern struct zebra_privs_t bgpd_privs;
 
@@ -606,14 +607,18 @@ static int bgp_accept(struct thread *thread)
 			BGP_EVENT_ADD(peer, TCP_connection_open);
 	}
 
+	/*
+	 * If we are doing nht for a peer that is v6 LL based
+	 * massage the event system to make things happy
+	 */
+	bgp_nht_interface_events(peer);
+
 	return 0;
 }
 
 /* BGP socket bind. */
 static char *bgp_get_bound_name(struct peer *peer)
 {
-	char *name = NULL;
-
 	if (!peer)
 		return NULL;
 
@@ -629,14 +634,16 @@ static char *bgp_get_bound_name(struct peer *peer)
 	 * takes precedence over VRF. For IPv4 peering, explicit interface or
 	 * VRF are the situations to bind.
 	 */
-	if (peer->su.sa.sa_family == AF_INET6)
-		name = (peer->conf_if ? peer->conf_if
-				      : (peer->ifname ? peer->ifname
-						      : peer->bgp->name));
-	else
-		name = peer->ifname ? peer->ifname : peer->bgp->name;
+	if (peer->su.sa.sa_family == AF_INET6 && peer->conf_if)
+		return peer->conf_if;
 
-	return name;
+	if (peer->ifname)
+		return peer->ifname;
+
+	if (peer->bgp->inst_type == BGP_INSTANCE_TYPE_VIEW)
+		return NULL;
+
+	return peer->bgp->name;
 }
 
 static int bgp_update_address(struct interface *ifp, const union sockunion *dst,

@@ -3397,8 +3397,21 @@ int bgp_get(struct bgp **bgp_val, as_t *as, const char *name,
 		return ret;
 
 	bgp = bgp_create(as, name, inst_type);
-	if (bgp_option_check(BGP_OPT_NO_ZEBRA) && name)
-		bgp->vrf_id = vrf_generate_id();
+
+	/*
+	 * view instances will never work inside of a vrf
+	 * as such they must always be in the VRF_DEFAULT
+	 * Also we must set this to something useful because
+	 * of the vrf socket code needing an actual useful
+	 * default value to send to the underlying OS.
+	 *
+	 * This code is currently ignoring vrf based
+	 * code using the -Z option( and that is probably
+	 * best addressed elsewhere in the code )
+	 */
+	if (inst_type == BGP_INSTANCE_TYPE_VIEW)
+		bgp->vrf_id = VRF_DEFAULT;
+
 	bgp_router_id_set(bgp, &bgp->router_id_zebra, true);
 	bgp_address_init(bgp);
 	bgp_tip_hash_init(bgp);
@@ -4721,6 +4734,10 @@ int peer_ebgp_multihop_set(struct peer *peer, int ttl)
 						BGP_NOTIFY_CEASE_CONFIG_CHANGE);
 			else
 				bgp_session_reset(peer);
+
+			/* Reconfigure BFD peer with new TTL. */
+			if (peer->bfd_config)
+				bgp_peer_bfd_update_source(peer);
 		}
 	} else {
 		group = peer->group;
@@ -4735,6 +4752,10 @@ int peer_ebgp_multihop_set(struct peer *peer, int ttl)
 						BGP_NOTIFY_CEASE_CONFIG_CHANGE);
 			else
 				bgp_session_reset(peer);
+
+			/* Reconfigure BFD peer with new TTL. */
+			if (peer->bfd_config)
+				bgp_peer_bfd_update_source(peer);
 		}
 	}
 	return 0;
@@ -4744,6 +4765,7 @@ int peer_ebgp_multihop_unset(struct peer *peer)
 {
 	struct peer_group *group;
 	struct listnode *node, *nnode;
+	int ttl;
 
 	if (peer->sort == BGP_PEER_IBGP)
 		return 0;
@@ -4752,9 +4774,14 @@ int peer_ebgp_multihop_unset(struct peer *peer)
 		return BGP_ERR_NO_EBGP_MULTIHOP_WITH_TTLHACK;
 
 	if (peer_group_active(peer))
-		peer->ttl = peer->group->conf->ttl;
+		ttl = peer->group->conf->ttl;
 	else
-		peer->ttl = BGP_DEFAULT_TTL;
+		ttl = BGP_DEFAULT_TTL;
+
+	if (ttl == peer->ttl)
+		return 0;
+
+	peer->ttl = ttl;
 
 	if (!CHECK_FLAG(peer->sflags, PEER_STATUS_GROUP)) {
 		if (BGP_IS_VALID_STATE_FOR_NOTIF(peer->status))
@@ -4762,6 +4789,10 @@ int peer_ebgp_multihop_unset(struct peer *peer)
 					BGP_NOTIFY_CEASE_CONFIG_CHANGE);
 		else
 			bgp_session_reset(peer);
+
+		/* Reconfigure BFD peer with new TTL. */
+		if (peer->bfd_config)
+			bgp_peer_bfd_update_source(peer);
 	} else {
 		group = peer->group;
 		for (ALL_LIST_ELEMENTS(group->peer, node, nnode, peer)) {
@@ -4778,6 +4809,10 @@ int peer_ebgp_multihop_unset(struct peer *peer)
 				else
 					bgp_session_reset(peer);
 			}
+
+			/* Reconfigure BFD peer with new TTL. */
+			if (peer->bfd_config)
+				bgp_peer_bfd_update_source(peer);
 		}
 	}
 	return 0;
@@ -4823,6 +4858,10 @@ int peer_update_source_if_set(struct peer *peer, const char *ifname)
 		} else
 			bgp_session_reset(peer);
 
+		/* Apply new source configuration to BFD session. */
+		if (peer->bfd_config)
+			bgp_peer_bfd_update_source(peer);
+
 		/* Skip peer-group mechanics for regular peers. */
 		return 0;
 	}
@@ -4856,6 +4895,10 @@ int peer_update_source_if_set(struct peer *peer, const char *ifname)
 					BGP_NOTIFY_CEASE_CONFIG_CHANGE);
 		} else
 			bgp_session_reset(member);
+
+		/* Apply new source configuration to BFD session. */
+		if (member->bfd_config)
+			bgp_peer_bfd_update_source(member);
 	}
 
 	return 0;
@@ -4885,6 +4928,10 @@ int peer_update_source_addr_set(struct peer *peer, const union sockunion *su)
 					BGP_NOTIFY_CEASE_CONFIG_CHANGE);
 		} else
 			bgp_session_reset(peer);
+
+		/* Apply new source configuration to BFD session. */
+		if (peer->bfd_config)
+			bgp_peer_bfd_update_source(peer);
 
 		/* Skip peer-group mechanics for regular peers. */
 		return 0;
@@ -4918,6 +4965,10 @@ int peer_update_source_addr_set(struct peer *peer, const union sockunion *su)
 					BGP_NOTIFY_CEASE_CONFIG_CHANGE);
 		} else
 			bgp_session_reset(member);
+
+		/* Apply new source configuration to BFD session. */
+		if (member->bfd_config)
+			bgp_peer_bfd_update_source(member);
 	}
 
 	return 0;
@@ -4955,6 +5006,10 @@ int peer_update_source_unset(struct peer *peer)
 		} else
 			bgp_session_reset(peer);
 
+		/* Apply new source configuration to BFD session. */
+		if (peer->bfd_config)
+			bgp_peer_bfd_update_source(peer);
+
 		/* Skip peer-group mechanics for regular peers. */
 		return 0;
 	}
@@ -4986,6 +5041,10 @@ int peer_update_source_unset(struct peer *peer)
 					BGP_NOTIFY_CEASE_CONFIG_CHANGE);
 		} else
 			bgp_session_reset(member);
+
+		/* Apply new source configuration to BFD session. */
+		if (member->bfd_config)
+			bgp_peer_bfd_update_source(member);
 	}
 
 	return 0;
@@ -6237,7 +6296,8 @@ static void peer_distribute_update(struct access_list *access)
 
 	for (ALL_LIST_ELEMENTS(bm->bgp, mnode, mnnode, bgp)) {
 		if (access->name)
-			update_group_policy_update(bgp, BGP_POLICY_FILTER_LIST,
+			update_group_policy_update(bgp,
+						   BGP_POLICY_DISTRIBUTE_LIST,
 						   access->name, 0, 0);
 		for (ALL_LIST_ELEMENTS(bgp->peer, node, nnode, peer)) {
 			FOREACH_AFI_SAFI (afi, safi) {

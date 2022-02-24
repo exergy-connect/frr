@@ -348,6 +348,8 @@ DECLARE_QOBJ_TYPE(route_map);
 	(strmatch(A, "frr-bgp-route-map:set-extcommunity-rt"))
 #define IS_SET_EXTCOMMUNITY_SOO(A)                                             \
 	(strmatch(A, "frr-bgp-route-map:set-extcommunity-soo"))
+#define IS_SET_EXTCOMMUNITY_LB(A)                                              \
+	(strmatch(A, "frr-bgp-route-map:set-extcommunity-lb"))
 #define IS_SET_AGGREGATOR(A)                                                   \
 	(strmatch(A, "frr-bgp-route-map:aggregator"))
 #define IS_SET_AS_PREPEND(A)                                                   \
@@ -423,9 +425,12 @@ extern struct route_map *route_map_lookup_by_name(const char *name);
 struct route_map *route_map_lookup_warn_noexist(struct vty *vty, const char *name);
 
 /* Apply route map to the object. */
-extern route_map_result_t route_map_apply(struct route_map *map,
-					  const struct prefix *prefix,
-					  void *object);
+extern route_map_result_t route_map_apply_ext(struct route_map *map,
+					      const struct prefix *prefix,
+					      void *match_object,
+					      void *set_object);
+#define route_map_apply(map, prefix, object)                                   \
+	route_map_apply_ext(map, prefix, object, object)
 
 extern void route_map_add_hook(void (*func)(const char *));
 extern void route_map_delete_hook(void (*func)(const char *));

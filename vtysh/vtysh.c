@@ -499,51 +499,8 @@ static int vtysh_execute_func(const char *line, int pager)
 	 */
 	if (ret == CMD_SUCCESS || ret == CMD_SUCCESS_DAEMON
 	    || ret == CMD_WARNING) {
-		if ((saved_node == BGP_VPNV4_NODE
-		     || saved_node == BGP_VPNV6_NODE
-		     || saved_node == BGP_IPV4_NODE
-		     || saved_node == BGP_IPV6_NODE
-		     || saved_node == BGP_FLOWSPECV4_NODE
-		     || saved_node == BGP_FLOWSPECV6_NODE
-		     || saved_node == BGP_IPV4M_NODE
-		     || saved_node == BGP_IPV4L_NODE
-		     || saved_node == BGP_IPV6L_NODE
-		     || saved_node == BGP_IPV6M_NODE
-		     || saved_node == BGP_EVPN_NODE
-		     || saved_node == LDP_IPV4_NODE
-		     || saved_node == LDP_IPV6_NODE)
-		    && (tried == 1)) {
-			vtysh_execute("exit-address-family");
-		} else if ((saved_node == BGP_EVPN_VNI_NODE) && (tried == 1)) {
-			vtysh_execute("exit-vni");
-		} else if (saved_node == BGP_VRF_POLICY_NODE && (tried == 1)) {
-			vtysh_execute("exit-vrf-policy");
-		} else if ((saved_node == BGP_VNC_DEFAULTS_NODE
-			    || saved_node == BGP_VNC_NVE_GROUP_NODE
-			    || saved_node == BGP_VNC_L2_GROUP_NODE)
-			   && (tried == 1)) {
-			vtysh_execute("exit-vnc");
-		} else if (saved_node == VRF_NODE && (tried == 1)) {
-			vtysh_execute("exit-vrf");
-		} else if ((saved_node == KEYCHAIN_KEY_NODE
-			    || saved_node == LDP_PSEUDOWIRE_NODE
-			    || saved_node == LDP_IPV4_IFACE_NODE
-			    || saved_node == LDP_IPV6_IFACE_NODE)
-			   && (tried == 1)) {
+		while (tried-- > 0)
 			vtysh_execute("exit");
-		} else if ((saved_node == SR_SEGMENT_LIST_NODE
-			    || saved_node == SR_POLICY_NODE
-			    || saved_node == SR_CANDIDATE_DYN_NODE
-			    || saved_node == PCEP_NODE
-			    || saved_node == PCEP_PCE_CONFIG_NODE
-			    || saved_node == PCEP_PCE_NODE
-			    || saved_node == PCEP_PCC_NODE)
-			   && (tried > 0)) {
-			vtysh_execute("exit");
-		} else if (tried) {
-			vtysh_execute("end");
-			vtysh_execute("configure");
-		}
 	}
 	/*
 	 * If command didn't succeed in any node, continue with return value
@@ -2139,8 +2096,7 @@ DEFUNSH(VTYSH_PATHD, pcep, pcep_cmd,
 }
 
 DEFUNSH(VTYSH_PATHD, pcep_cli_pcc, pcep_cli_pcc_cmd,
-	"[no] pcc",
-	NO_STR
+	"pcc",
 	"PCC configuration\n")
 {
 	vty->node = PCEP_PCC_NODE;
@@ -2148,8 +2104,7 @@ DEFUNSH(VTYSH_PATHD, pcep_cli_pcc, pcep_cli_pcc_cmd,
 }
 
 DEFUNSH(VTYSH_PATHD, pcep_cli_pce, pcep_cli_pce_cmd,
-	"[no] pce WORD",
-	NO_STR
+	"pce WORD",
 	"PCE configuration\n"
 	"Peer name\n")
 {
@@ -2158,8 +2113,7 @@ DEFUNSH(VTYSH_PATHD, pcep_cli_pce, pcep_cli_pce_cmd,
 }
 
 DEFUNSH(VTYSH_PATHD, pcep_cli_pcep_pce_config, pcep_cli_pcep_pce_config_cmd,
-	"[no] pce-config WORD",
-	NO_STR
+	"pce-config WORD",
 	"PCEP peer Configuration Group\n"
 	"PCEP peer Configuration Group name\n")
 {

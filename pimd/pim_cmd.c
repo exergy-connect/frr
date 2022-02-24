@@ -4146,9 +4146,8 @@ static void clear_pim_bsr_db(struct pim_instance *pim)
 			rpnode->info = NULL;
 			route_unlock_node(rpnode);
 			route_unlock_node(rpnode);
+			XFREE(MTYPE_PIM_RP, rp_info);
 		}
-
-		XFREE(MTYPE_PIM_RP, rp_info);
 
 		pim_free_bsgrp_node(bsgrp->scope->bsrp_table, &bsgrp->group);
 		pim_free_bsgrp_data(bsgrp);
@@ -6275,7 +6274,7 @@ static void show_mroute(struct pim_instance *pim, struct vty *vty,
 
 		if (!uj && !found_oif) {
 			vty_out(vty,
-				"%-15s %-15s %-15s %-6s %-16s %-16s %-3d  %8s\n",
+				"%-15s %-15s %-8s %-6s %-16s %-16s %-3d  %8s\n",
 				src_str, grp_str, state_str, "none", in_ifname,
 				"none", 0, "--:--:--");
 		}
@@ -6382,10 +6381,9 @@ static void show_mroute(struct pim_instance *pim, struct vty *vty,
 						       json_ifp_out);
 			} else {
 				vty_out(vty,
-					"%-15s %-15s %-6s %-16s %-16s %-3d  %8s %s\n",
-					src_str, grp_str, proto, in_ifname,
-					out_ifname, ttl, oif_uptime,
-					pim->vrf->name);
+					"%-15s %-15s %-8s %-6s %-16s %-16s %-3d  %8s\n",
+					src_str, grp_str, "-", proto, in_ifname,
+					out_ifname, ttl, oif_uptime);
 				if (first && !fill) {
 					src_str[0] = '\0';
 					grp_str[0] = '\0';
@@ -6397,9 +6395,9 @@ static void show_mroute(struct pim_instance *pim, struct vty *vty,
 
 		if (!uj && !found_oif) {
 			vty_out(vty,
-				"%-15s %-15s %-6s %-16s %-16s %-3d  %8s %s\n",
-				src_str, grp_str, proto, in_ifname, "none", 0,
-				"--:--:--", pim->vrf->name);
+				"%-15s %-15s %-8s %-6s %-16s %-16s %-3d  %8s\n",
+				src_str, grp_str, "-", proto, in_ifname, "none",
+				0, "--:--:--");
 		}
 	}
 

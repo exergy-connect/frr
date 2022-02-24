@@ -705,11 +705,11 @@ static int ospf_if_delete_hook(struct interface *ifp)
 	 */
 	ospf_del_if_params(ifp, IF_DEF_PARAMS(ifp));
 
-	route_table_finish(IF_OIFS(ifp));
-
 	for (rn = route_top(IF_OIFS_PARAMS(ifp)); rn; rn = route_next(rn))
 		if (rn->info)
 			ospf_del_if_params(ifp, rn->info);
+
+	route_table_finish(IF_OIFS(ifp));
 	route_table_finish(IF_OIFS_PARAMS(ifp));
 
 	XFREE(MTYPE_OSPF_IF_INFO, ifp->info);
@@ -846,6 +846,8 @@ int ospf_if_down(struct ospf_interface *oi)
 	/* Shutdown packet reception and sending */
 	ospf_if_stream_unset(oi);
 
+	if (!ospf->new_table)
+		return 1;
 	for (rn = route_top(ospf->new_table); rn; rn = route_next(rn)) {
 		or = rn->info;
 
@@ -906,6 +908,13 @@ struct ospf_interface *ospf_vl_new(struct ospf *ospf,
 		if (IS_DEBUG_OSPF_EVENT)
 			zlog_debug(
 				"ospf_vl_new(): Alarm: cannot create more than OSPF_MAX_VL_COUNT virtual links");
+		return NULL;
+	}
+
+	if (ospf->vrf_id == VRF_UNKNOWN) {
+		if (IS_DEBUG_OSPF_EVENT)
+			zlog_debug(
+				"ospf_vl_new(): Alarm: cannot create pseudo interface in unknown VRF");
 		return NULL;
 	}
 
